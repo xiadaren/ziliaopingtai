@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>笔耕书院 · 班级笔记共享</title>
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- 字体：思源宋体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <!-- 自定义样式 -->
+    <link href="style.css" rel="stylesheet">
+</head>
+<body>
+
+    <!-- 顶部装饰带 -->
+    <div class="top-ornament"></div>
+
+    <!-- 导航栏 -->
+    <nav class="navbar-custom">
+        <div class="container d-flex align-items-center justify-content-between gap-3">
+            <a class="nav-brand" onclick="App.goHome()">
+                <span class="brand-seal">笔</span>
+                <span class="brand-text">笔耕书院</span>
+            </a>
+            <div class="nav-search d-flex align-items-center gap-2 flex-grow-1" style="max-width:320px;">
+                <div class="search-box flex-grow-1">
+                    <i class="bi bi-search search-icon"></i>
+                    <input type="text" class="search-input" id="searchInput"
+                           placeholder="搜索笔记..." autocomplete="off">
+                </div>
+            </div>
+            <span class="nav-motto d-none d-lg-inline">同窗共读 · 以笔记会友</span>
+        </div>
+    </nav>
+
+    <!-- Toast 通知容器 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- 删除确认弹窗 -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content modal-classical">
+                <div class="modal-header">
+                    <h6 class="modal-title">确认删除</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">删除后无法恢复，确定要删除这篇笔记吗？</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-classical-outline btn-sm" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-classical-danger btn-sm" id="confirmDeleteBtn">删除</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+        <div class="container">
+
+            <!-- ====== 视图1：首页 · 专业列表 ====== -->
+            <section id="viewHome" class="view active">
+                <div class="hero-section">
+                    <div class="hero-ornament-top"></div>
+                    <h1 class="hero-title">择业问道</h1>
+                    <p class="hero-divider">◆ ◇ ◆</p>
+                    <p class="hero-desc">自专业入，经班级聚，以笔记传学问之道</p>
+                    <div class="hero-ornament-bottom"></div>
+                </div>
+                <div class="row g-3" id="majorList"></div>
+            </section>
+
+            <!-- ====== 视图2：班级列表 ====== -->
+            <section id="viewClasses" class="view">
+                <div class="breadcrumb-custom" id="classBreadcrumb"></div>
+                <h2 class="page-title" id="className"></h2>
+                <p class="page-subtitle" id="classSubtitle"></p>
+                <div class="section-divider"></div>
+                <div class="row g-3" id="classList"></div>
+            </section>
+
+            <!-- ====== 视图3：笔记列表 ====== -->
+            <section id="viewNotes" class="view">
+                <div class="breadcrumb-custom" id="noteBreadcrumb"></div>
+                <div class="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-3">
+                    <div>
+                        <h2 class="page-title mb-1" id="noteClassName"></h2>
+                        <p class="page-subtitle mb-0" id="noteSubtitle"></p>
+                    </div>
+                    <button class="btn btn-add-note" onclick="App.showEditor('add')">
+                        <i class="bi bi-brush me-1"></i>落笔成文
+                    </button>
+                </div>
+                <div class="section-divider"></div>
+                <div id="noteList"></div>
+            </section>
+
+            <!-- ====== 视图4：笔记详情 ====== -->
+            <section id="viewDetail" class="view">
+                <div class="breadcrumb-custom" id="detailBreadcrumb"></div>
+                <div class="detail-card">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                        <h1 class="detail-title mb-0" id="detailTitle"></h1>
+                        <div class="detail-actions d-flex gap-2">
+                            <button class="btn btn-classical-outline btn-sm" onclick="App.showEditor('edit')">
+                                <i class="bi bi-pencil-square me-1"></i>编辑
+                            </button>
+                            <button class="btn btn-classical-danger btn-sm" onclick="App.confirmDelete()">
+                                <i class="bi bi-trash3 me-1"></i>删除
+                            </button>
+                        </div>
+                    </div>
+                    <div class="detail-meta" id="detailMeta"></div>
+                    <div class="detail-content" id="detailContent"></div>
+                </div>
+            </section>
+
+            <!-- ====== 视图6：搜索结果 ====== -->
+            <section id="viewSearch" class="view">
+                <div class="breadcrumb-custom">
+                    <a onclick="App.goHome()">首页</a><span class="sep">/</span><span class="current">搜索</span>
+                </div>
+                <h2 class="page-title" id="searchTitle">搜索结果</h2>
+                <p class="page-subtitle" id="searchSubtitle"></p>
+                <div class="section-divider"></div>
+                <div id="searchResults"></div>
+            </section>
+
+            <!-- ====== 视图5：添加/编辑笔记 ====== -->
+            <section id="viewEditor" class="view">
+                <div class="breadcrumb-custom" id="editorBreadcrumb"></div>
+                <h2 class="page-title" id="editorTitle">落笔成文</h2>
+                <p class="page-subtitle" id="editorSubtitle">书写笔记，可粘贴文字与图片</p>
+                <div class="section-divider"></div>
+
+                <div class="editor-card">
+                    <!-- 标题输入 -->
+                    <input type="text" class="form-control form-title-input"
+                           id="inputTitle" placeholder="拟定标题..." autocomplete="off">
+
+                    <!-- 工具栏 -->
+                    <div class="editor-toolbar" id="editorToolbar">
+                        <button class="toolbar-btn" title="加粗" onclick="App.execCmd('bold')"><i class="bi bi-type-bold"></i></button>
+                        <button class="toolbar-btn" title="斜体" onclick="App.execCmd('italic')"><i class="bi bi-type-italic"></i></button>
+                        <button class="toolbar-btn" title="下划线" onclick="App.execCmd('underline')"><i class="bi bi-type-underline"></i></button>
+                        <div class="toolbar-divider"></div>
+                        <button class="toolbar-btn" title="有序列表" onclick="App.execCmd('insertOrderedList')"><i class="bi bi-list-ol"></i></button>
+                        <button class="toolbar-btn" title="无序列表" onclick="App.execCmd('insertUnorderedList')"><i class="bi bi-list-ul"></i></button>
+                        <div class="toolbar-divider"></div>
+                        <label class="toolbar-btn" title="字体颜色" style="position:relative;">
+                            <i class="bi bi-palette2"></i>
+                            <input type="color" value="#9B2C2C"
+                                   onchange="App.execCmdVal('foreColor', this.value)"
+                                   style="position:absolute;opacity:0;width:0;height:0;">
+                        </label>
+                        <div class="toolbar-divider"></div>
+                        <button class="toolbar-btn" title="插入图片" onclick="App.pickImage()"><i class="bi bi-image"></i></button>
+                    </div>
+
+                    <!-- 编辑区域 -->
+                    <div class="editor-area" id="editorArea" contenteditable="true"
+                         data-placeholder="在此书写笔记内容..."></div>
+
+                    <!-- 底部操作栏 -->
+                    <div class="editor-footer">
+                        <button class="btn btn-classical-outline" onclick="App.cancelEditor()">返回</button>
+                        <button class="btn btn-classical-primary" onclick="App.submitNote()">
+                            <i class="bi bi-check2-circle me-1"></i><span id="submitText">发布笔记</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="site-footer">
+        <div class="footer-divider">
+            <span class="footer-ornament">◇</span>
+        </div>
+        <p class="footer-text">
+            为天地立心 · 为生民立命 · 为往圣继绝学 · 为万世开太平
+        </p>
+        <p class="footer-credit">笔耕书院 · 班级笔记共享平台</p>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- 应用逻辑 -->
+    <script src="app.js"></script>
+</body>
+</html>
