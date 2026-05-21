@@ -836,6 +836,59 @@ body::after {
     font-size: 0.75rem;
     color: var(--border);
     letter-spacing: 1px;
+    margin-top: 1.5rem;
+}
+
+/* ====== 开源信息区域 ====== */
+.opensource-section {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px dashed var(--border);
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.opensource-intro {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 0.8rem;
+}
+
+.opensource-warning {
+    font-size: 0.78rem;
+    color: var(--accent);
+    background: rgba(155, 44, 44, 0.08);
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius);
+    border-left: 3px solid var(--accent);
+    margin-bottom: 1rem;
+    line-height: 1.5;
+}
+
+.github-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    color: var(--text);
+    text-decoration: none;
+    padding: 0.5rem 1.2rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: all 0.3s ease;
+}
+
+.github-link:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    text-decoration: none;
+}
+
+.github-link i {
+    font-size: 1.1rem;
 }
 
 /* ====== 响应式 ====== */
