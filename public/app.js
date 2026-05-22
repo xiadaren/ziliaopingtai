@@ -112,10 +112,10 @@ const App = {
         const box = document.getElementById('majorList');
         box.innerHTML = majors.map(m => `
             <div class="col-sm-6 col-lg-4 col-xl-3">
-                <div class="category-card" onclick="App.openMajor(${m.id}, '${m.name}')">
+                <div class="category-card" onclick="App.openMajor(${m.id}, '${App.escapeAttr(m.name)}')">
                     <span class="watermark-char">${m.watermark}</span>
                     <div class="seal-icon"><i class="bi ${m.icon}"></i></div>
-                    <div class="category-name">${m.name}</div>
+                    <div class="category-name">${App.escapeHtml(m.name)}</div>
                     <div class="category-meta">
                         <span class="meta-badge"><i class="bi bi-people"></i> ${m.class_count}班</span>
                         <span class="meta-badge"><i class="bi bi-file-text"></i> ${m.note_count}篇</span>
@@ -129,6 +129,7 @@ const App = {
     async openMajor(id, name, updateHash) {
         currentMajor = { id, name };
         currentClass = null;
+        currentNote = null;
 
         if (updateHash !== false) this.updateHash(`/major/${id}/${encodeURIComponent(name)}`);
 
@@ -136,7 +137,7 @@ const App = {
         if (!classes) return;
 
         document.getElementById('classBreadcrumb').innerHTML =
-            `<a onclick="App.goHome()">首页</a><span class="sep">/</span><span class="current">${name}</span>`;
+            `<a onclick="App.goHome()">首页</a><span class="sep">/</span><span class="current">${App.escapeHtml(name)}</span>`;
         document.getElementById('className').textContent = name;
         document.getElementById('classSubtitle').textContent = `共 ${classes.length} 个班级`;
 
@@ -151,10 +152,10 @@ const App = {
             const tianGan = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
             box.innerHTML = classes.map((c, i) => `
                 <div class="col-sm-6 col-lg-4">
-                    <div class="category-card" onclick="App.openClass(${c.id}, '${c.name}')">
+                    <div class="category-card" onclick="App.openClass(${c.id}, '${App.escapeAttr(c.name)}')">
                         <span class="watermark-char">${tianGan[i % 10]}</span>
                         <div class="seal-icon"><i class="bi bi-people-fill"></i></div>
-                        <div class="category-name">${c.name}</div>
+                        <div class="category-name">${App.escapeHtml(c.name)}</div>
                         <div class="category-meta">
                             <span class="meta-badge"><i class="bi bi-file-text"></i> ${c.note_count}篇</span>
                         </div>
@@ -167,6 +168,20 @@ const App = {
 
     /* ====== 打开班级 → 笔记列表 ====== */
     async openClass(id, name, updateHash) {
+        if (!currentMajor) {
+            const majors = await this.api('/api/majors');
+            if (!majors) return;
+            const classes = await this.api(`/api/majors/${id}/classes`);
+            if (classes && classes.length > 0) {
+                currentMajor = { id: classes[0].major_id, name: '' };
+                const major = majors.find(m => m.id === currentMajor.id);
+                if (major) currentMajor.name = major.name;
+            } else {
+                this.toast('无法确定班级所属专业', 'danger');
+                return;
+            }
+        }
+
         currentClass = { id, name };
 
         if (updateHash !== false) this.updateHash(`/class/${id}/${encodeURIComponent(name)}`);
@@ -176,8 +191,8 @@ const App = {
 
         document.getElementById('noteBreadcrumb').innerHTML =
             `<a onclick="App.goHome()">首页</a><span class="sep">/</span>` +
-            `<a onclick="App.openMajor(${currentMajor.id},'${currentMajor.name}')">${currentMajor.name}</a>` +
-            `<span class="sep">/</span><span class="current">${name}</span>`;
+            `<a onclick="App.openMajor(${currentMajor.id},'${App.escapeAttr(currentMajor.name)}')">${App.escapeHtml(currentMajor.name)}</a>` +
+            `<span class="sep">/</span><span class="current">${App.escapeHtml(name)}</span>`;
         document.getElementById('noteClassName').textContent = name;
         document.getElementById('noteSubtitle').textContent = `共 ${notes.length} 篇笔记`;
 
@@ -201,11 +216,11 @@ const App = {
             return `
             <div class="note-card d-flex align-items-start gap-3">
                 <div class="flex-grow-1">
-                    <a class="note-title-link" onclick="App.openNote(${n.id})">${n.title}</a>
+                    <a class="note-title-link" onclick="App.openNote(${n.id})">${App.escapeHtml(n.title)}</a>
                     <div class="note-time mt-1">
                         <i class="bi bi-clock me-1"></i>${n.updated_at}${edited ? '（已修）' : ''}
                     </div>
-                    <div class="note-preview">${n.preview || ''}</div>
+                    <div class="note-preview">${App.escapeHtml(n.preview || '')}</div>
                 </div>
                 ${n.firstImage ? `<img src="${n.firstImage}" class="note-thumb d-none d-sm-block" alt="">` : (n.hasImage ? '<div class="note-thumb-icon d-none d-sm-flex"><i class="bi bi-image"></i></div>' : '')}
                 <div class="note-actions flex-shrink-0">
@@ -224,16 +239,15 @@ const App = {
 
         if (updateHash !== false) this.updateHash(`/note/${id}`);
 
-        // 确保currentMajor和currentClass有值（比如直接从URL进入时）
         if (!currentMajor) currentMajor = { id: note.major_id, name: note.major_name };
         if (!currentClass) currentClass = { id: note.class_id, name: note.class_name };
 
         document.getElementById('detailBreadcrumb').innerHTML =
             `<a onclick="App.goHome()">首页</a><span class="sep">/</span>` +
-            `<a onclick="App.openMajor(${currentMajor.id},'${currentMajor.name}')">${currentMajor.name}</a>` +
+            `<a onclick="App.openMajor(${currentMajor.id},'${App.escapeAttr(currentMajor.name)}')">${App.escapeHtml(currentMajor.name)}</a>` +
             `<span class="sep">/</span>` +
-            `<a onclick="App.openClass(${currentClass.id},'${currentClass.name}')">${currentClass.name}</a>` +
-            `<span class="sep">/</span><span class="current">${note.title}</span>`;
+            `<a onclick="App.openClass(${currentClass.id},'${App.escapeAttr(currentClass.name)}')">${App.escapeHtml(currentClass.name)}</a>` +
+            `<span class="sep">/</span><span class="current">${App.escapeHtml(note.title)}</span>`;
 
         document.getElementById('detailTitle').textContent = note.title;
         document.getElementById('detailMeta').innerHTML =
@@ -247,24 +261,23 @@ const App = {
     showEditor(mode, noteId, updateHash) {
         editorMode = mode;
 
-        if (updateHash !== false) {
-            const hash = mode === 'edit' ? `/editor/edit/${noteId}` : '/editor/add';
-            this.updateHash(hash);
-        }
-
-        if (mode === 'edit' && noteId) {
-            // 如果还没加载当前笔记，先获取
-            if (!currentNote || currentNote.id !== noteId) {
-                this.api(`/api/notes/${noteId}`).then(note => {
-                    if (note) {
-                        currentNote = note;
-                        this.fillEditor(note);
-                    }
-                });
-                return;
+        if (mode === 'edit') {
+            const targetId = noteId || (currentNote && currentNote.id);
+            if (targetId) {
+                if (updateHash !== false) this.updateHash(`/editor/edit/${targetId}`);
+                if (!currentNote || currentNote.id !== targetId) {
+                    this.api(`/api/notes/${targetId}`).then(note => {
+                        if (note) {
+                            currentNote = note;
+                            this.fillEditor(note);
+                        }
+                    });
+                    return;
+                }
+                this.fillEditor(currentNote);
             }
-            this.fillEditor(currentNote);
         } else {
+            if (updateHash !== false) this.updateHash('/editor/add');
             currentNote = null;
             document.getElementById('editorTitle').textContent = '落笔成文';
             document.getElementById('editorSubtitle').textContent = '书写笔记，可粘贴文字与图片';
@@ -295,9 +308,9 @@ const App = {
         if (!currentMajor || !currentClass) return;
         document.getElementById('editorBreadcrumb').innerHTML =
             `<a onclick="App.goHome()">首页</a><span class="sep">/</span>` +
-            `<a onclick="App.openMajor(${currentMajor.id},'${currentMajor.name}')">${currentMajor.name}</a>` +
+            `<a onclick="App.openMajor(${currentMajor.id},'${App.escapeAttr(currentMajor.name)}')">${App.escapeHtml(currentMajor.name)}</a>` +
             `<span class="sep">/</span>` +
-            `<a onclick="App.openClass(${currentClass.id},'${currentClass.name}')">${currentClass.name}</a>` +
+            `<a onclick="App.openClass(${currentClass.id},'${App.escapeAttr(currentClass.name)}')">${App.escapeHtml(currentClass.name)}</a>` +
             `<span class="sep">/</span><span class="current">${mode === 'edit' ? '修润旧文' : '落笔成文'}</span>`;
     },
 
@@ -489,13 +502,13 @@ const App = {
             box.innerHTML = results.map(n => `
             <div class="note-card d-flex align-items-start gap-3">
                 <div class="flex-grow-1">
-                    <a class="note-title-link" onclick="App.openNote(${n.id})">${n.title}</a>
+                    <a class="note-title-link" onclick="App.openNote(${n.id})">${App.escapeHtml(n.title)}</a>
                     <div class="note-time mt-1">
-                        <span class="meta-badge me-2"><i class="bi bi-book"></i> ${n.major_name}</span>
-                        <span class="meta-badge me-2"><i class="bi bi-people"></i> ${n.class_name}</span>
+                        <span class="meta-badge me-2"><i class="bi bi-book"></i> ${App.escapeHtml(n.major_name)}</span>
+                        <span class="meta-badge me-2"><i class="bi bi-people"></i> ${App.escapeHtml(n.class_name)}</span>
                         <i class="bi bi-clock me-1"></i>${n.updated_at}
                     </div>
-                    <div class="note-preview">${n.preview || ''}</div>
+                    <div class="note-preview">${App.escapeHtml(n.preview || '')}</div>
                 </div>
                 <div class="note-actions flex-shrink-0">
                     <button class="btn-icon" title="查看" onclick="App.openNote(${n.id})"><i class="bi bi-eye"></i></button>
@@ -518,6 +531,16 @@ const App = {
     },
 
     /* ====== 工具 ====== */
+    escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    },
+
+    escapeAttr(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    },
+
     formatNow() {
         const d = new Date();
         const p = n => String(n).padStart(2, '0');
