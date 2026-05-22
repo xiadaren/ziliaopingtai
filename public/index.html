@@ -10,6 +10,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <!-- 字体：思源宋体 -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <!-- Quill 编辑器 -->
+    <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
     <!-- 自定义样式 -->
     <link href="style.css" rel="stylesheet">
 </head>
@@ -140,28 +142,70 @@
                     <input type="text" class="form-control form-title-input"
                            id="inputTitle" placeholder="拟定标题..." autocomplete="off">
 
-                    <!-- 工具栏 -->
-                    <div class="editor-toolbar" id="editorToolbar">
-                        <button class="toolbar-btn" title="加粗" onclick="App.execCmd('bold')"><i class="bi bi-type-bold"></i></button>
-                        <button class="toolbar-btn" title="斜体" onclick="App.execCmd('italic')"><i class="bi bi-type-italic"></i></button>
-                        <button class="toolbar-btn" title="下划线" onclick="App.execCmd('underline')"><i class="bi bi-type-underline"></i></button>
-                        <div class="toolbar-divider"></div>
-                        <button class="toolbar-btn" title="有序列表" onclick="App.execCmd('insertOrderedList')"><i class="bi bi-list-ol"></i></button>
-                        <button class="toolbar-btn" title="无序列表" onclick="App.execCmd('insertUnorderedList')"><i class="bi bi-list-ul"></i></button>
-                        <div class="toolbar-divider"></div>
-                        <label class="toolbar-btn" title="字体颜色" style="position:relative;">
-                            <i class="bi bi-palette2"></i>
-                            <input type="color" value="#9B2C2C"
-                                   onchange="App.execCmdVal('foreColor', this.value)"
-                                   style="position:absolute;opacity:0;width:0;height:0;">
-                        </label>
-                        <div class="toolbar-divider"></div>
-                        <button class="toolbar-btn" title="插入图片" onclick="App.pickImage()"><i class="bi bi-image"></i></button>
+                    <!-- Quill 编辑器容器 -->
+                    <div id="quill-container">
+                        <div id="quill-toolbar">
+                            <span class="ql-formats">
+                                <select class="ql-header" title="标题">
+                                    <option value="1">标题 1</option>
+                                    <option value="2">标题 2</option>
+                                    <option value="3">标题 3</option>
+                                    <option selected>正文</option>
+                                </select>
+                                <select class="ql-size" title="字号">
+                                    <option value="small">小</option>
+                                    <option selected>普通</option>
+                                    <option value="large">大</option>
+                                    <option value="huge">特大</option>
+                                </select>
+                                <select class="ql-font" title="字体">
+                                    <option selected>默认</option>
+                                    <option value="serif">宋体</option>
+                                    <option value="monospace">等宽</option>
+                                </select>
+                            </span>
+                            <span class="ql-formats">
+                                <button class="ql-bold" title="加粗"></button>
+                                <button class="ql-italic" title="斜体"></button>
+                                <button class="ql-underline" title="下划线"></button>
+                                <button class="ql-strike" title="删除线"></button>
+                            </span>
+                            <span class="ql-formats">
+                                <button class="ql-color" title="字体颜色"></button>
+                                <button class="ql-background" title="背景颜色"></button>
+                            </span>
+                            <span class="ql-formats">
+                                <button class="ql-list" value="ordered" title="有序列表"></button>
+                                <button class="ql-list" value="bullet" title="无序列表"></button>
+                                <button class="ql-indent" value="-1" title="减少缩进"></button>
+                                <button class="ql-indent" value="+1" title="增加缩进"></button>
+                            </span>
+                            <span class="ql-formats">
+                                <select class="ql-align" title="对齐">
+                                    <option selected></option>
+                                    <option value="center"></option>
+                                    <option value="right"></option>
+                                    <option value="justify"></option>
+                                </select>
+                            </span>
+                            <span class="ql-formats">
+                                <button class="ql-blockquote" title="引用"></button>
+                                <button class="ql-code-block" title="代码块"></button>
+                                <button class="ql-link" title="超链接"></button>
+                                <button class="ql-image" title="图片"></button>
+                            </span>
+                            <span class="ql-formats">
+                                <button class="ql-clean" title="清除格式"></button>
+                            </span>
+                        </div>
+                        <div id="quill-editor"></div>
                     </div>
 
-                    <!-- 编辑区域 -->
-                    <div class="editor-area" id="editorArea" contenteditable="true"
-                         data-placeholder="在此书写笔记内容..."></div>
+                    <!-- 字数统计 -->
+                    <div class="editor-stats">
+                        <span id="charCount">0 字</span>
+                        <span id="imgCount">0 图</span>
+                    </div>
 
                     <!-- 底部操作栏 -->
                     <div class="editor-footer">
@@ -206,6 +250,8 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Quill 编辑器 -->
+    <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
     <!-- 应用逻辑 -->
     <script src="app.js"></script>
 </body>

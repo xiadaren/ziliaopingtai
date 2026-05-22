@@ -616,6 +616,152 @@ body::after {
     box-shadow: 0 2px 12px rgba(28,17,8,0.05);
 }
 
+/* Quill 编辑器样式覆盖 */
+#quill-container {
+    border: none;
+}
+
+#quill-toolbar {
+    background: #2C2218;
+    border-bottom: 2px solid var(--accent);
+    padding: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    border: none;
+}
+
+#quill-toolbar .ql-formats {
+    margin-right: 2px;
+}
+
+/* 覆盖 Quill 工具栏默认样式为古典风格 */
+#quill-toolbar .ql-picker-label,
+#quill-toolbar button.ql-formats {
+    color: var(--accent) !important;
+}
+
+#quill-toolbar .ql-picker-label:hover,
+#quill-toolbar button:hover {
+    color: #fff !important;
+    background: rgba(196,163,90,0.2);
+}
+
+#quill-toolbar button.ql-active {
+    color: #fff !important;
+    background: rgba(196,163,90,0.3);
+}
+
+#quill-toolbar svg {
+    fill: var(--accent) !important;
+}
+
+#quill-toolbar button:hover svg,
+#quill-toolbar button.ql-active svg {
+    fill: #fff !important;
+}
+
+/* Quill 编辑器主体 */
+#quill-editor {
+    min-height: 340px;
+    font-family: inherit;
+    font-size: 1rem;
+    line-height: 2;
+    color: #3D3225;
+    padding: 1.2rem 1.5rem;
+    border: none !important;
+    /* 信笺横线 */
+    background-image:
+        linear-gradient(transparent 31px, var(--border-light) 31px, var(--border-light) 32px);
+    background-size: 100% 32px;
+    background-position: 0 11px;
+}
+
+#quill-editor .ql-editor {
+    padding: 0;
+    min-height: 340px;
+    line-height: 2;
+    font-family: inherit;
+}
+
+#quill-editor .ql-editor p {
+    margin-bottom: 1rem;
+}
+
+#quill-editor .ql-editor img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin: 0.8rem 0;
+    border: 1px solid var(--border-light);
+}
+
+#quill-editor .ql-editor blockquote {
+    border-left: 4px solid var(--primary);
+    padding-left: 1rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    background: var(--primary-light);
+    padding: 0.8rem 1rem;
+    border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+#quill-editor .ql-editor pre.ql-syntax {
+    background: #2C2218;
+    color: #E8DFD0;
+    padding: 1rem;
+    border-radius: var(--radius);
+    font-family: 'Courier New', monospace;
+    overflow-x: auto;
+}
+
+#quill-editor .ql-editor a {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+/* 移除 Quill 默认边框 */
+.ql-toolbar.ql-snow {
+    border: none !important;
+    background: #2C2218;
+}
+
+.ql-container.ql-snow {
+    border: none !important;
+}
+
+.ql-snow .ql-picker-options {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.ql-snow .ql-tooltip {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px rgba(28,17,8,0.1);
+    font-family: inherit;
+}
+
+.ql-snow .ql-tooltip input[type=text] {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.3rem 0.6rem;
+    font-family: inherit;
+}
+
+/* 编辑器字数统计 */
+.editor-stats {
+    padding: 0.5rem 1.5rem;
+    background: #FAF6ED;
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    gap: 1rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
 .form-title-input {
     border: none;
     border-bottom: 2px solid var(--border);

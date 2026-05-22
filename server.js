@@ -96,6 +96,19 @@ initSqlJs().then(SQL => {
         global.saveDB();
         process.exit(0);
     });
+    process.on('SIGTERM', () => {
+        global.saveDB();
+        process.exit(0);
+    });
+    process.on('uncaughtException', (err) => {
+        console.error('[未捕获异常]', err);
+        global.saveDB();
+        process.exit(1);
+    });
+    process.on('unhandledRejection', (reason, promise) => {
+        console.error('[未处理的 Promise 拒绝]', reason);
+        global.saveDB();
+    });
 
     console.log('[数据库] sql.js 初始化完成');
     startServer();
@@ -262,7 +275,8 @@ function sanitizeHTML(html) {
             } else if (allAllowed.includes(attrName)) {
                 if (attrName === 'href' || attrName === 'src') {
                     const val = attrValue.trim().toLowerCase();
-                    if (val.startsWith('javascript:') || val.startsWith('data:text/html') || val.startsWith('vbscript:')) continue;
+                    if (val.startsWith('javascript:') || val.startsWith('vbscript:')) continue;
+                    if (attrName === 'src' && val.startsWith('data:') && !val.startsWith('data:image/')) continue;
                 }
                 result += ` ${attrName}="${attrValue}"`;
             }
@@ -319,6 +333,14 @@ app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 // 静态文件
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(UPLOAD_DIR));
+
+// 数据库未初始化时拦截 API 请求
+app.use('/api/', (req, res, next) => {
+    if (!db) {
+        return res.status(503).json({ success: false, message: '服务初始化中，请稍后重试' });
+    }
+    next();
+});
 
 /* ============================================================
    API 路由
@@ -514,7 +536,8 @@ app.delete('/api/notes/:id', (req, res) => {
 
         imgPaths.forEach(imgUrl => {
             try {
-                const filePath = path.join(__dirname, imgUrl);
+                const normalizedUrl = imgUrl.startsWith('/') ? imgUrl.substring(1) : imgUrl;
+                const filePath = path.join(UPLOAD_DIR, normalizedUrl.replace(/^uploads\//, ''));
                 if (fs.existsSync(filePath) && filePath.startsWith(UPLOAD_DIR)) {
                     fs.unlinkSync(filePath);
                 }

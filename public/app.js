@@ -11,6 +11,7 @@ let currentClass = null;   // { id, name }
 let currentNote = null;    // { id, title, content, ... }
 let editorMode = 'add';    // 'add' | 'edit'
 let deleteModal = null;
+let quillEditor = null;    // Quill 实例
 
 /* ============================================================
    主应用对象
@@ -283,7 +284,9 @@ const App = {
             document.getElementById('editorSubtitle').textContent = '书写笔记，可粘贴文字与图片';
             document.getElementById('submitText').textContent = '发布笔记';
             document.getElementById('inputTitle').value = '';
-            document.getElementById('editorArea').innerHTML = '';
+            if (quillEditor) {
+                quillEditor.setContents([]);
+            }
         }
 
         this.setEditorBreadcrumb(mode);
@@ -297,7 +300,10 @@ const App = {
         document.getElementById('editorSubtitle').textContent = '修改后点击发布即可更新';
         document.getElementById('submitText').textContent = '更新笔记';
         document.getElementById('inputTitle').value = note.title;
-        document.getElementById('editorArea').innerHTML = note.content;
+        if (quillEditor) {
+            quillEditor.clipboard.dangerouslyPasteHTML(note.content);
+            this.updateEditorStats();
+        }
         this.setEditorBreadcrumb('edit');
         this.switchView('Editor');
         setTimeout(() => document.getElementById('inputTitle').focus(), 120);
@@ -317,16 +323,21 @@ const App = {
     /* ====== 提交笔记 ====== */
     async submitNote() {
         const title = document.getElementById('inputTitle').value.trim();
-        const content = document.getElementById('editorArea').innerHTML.trim();
+        let content = '';
+        if (quillEditor) {
+            content = quillEditor.root.innerHTML.trim();
+            if (quillEditor.getText().trim() === '') {
+                content = '';
+            }
+        }
 
         if (!title) {
             this.toast('请拟定笔记标题', 'danger');
             document.getElementById('inputTitle').focus();
             return;
         }
-        if (!content || content === '<br>') {
+        if (!content || content === '<p><br></p>') {
             this.toast('请书写笔记内容', 'danger');
-            document.getElementById('editorArea').focus();
             return;
         }
 
@@ -377,17 +388,6 @@ const App = {
         deleteModal.show();
     },
 
-    /* ====== 富文本命令 ====== */
-    execCmd(cmd) {
-        document.execCommand(cmd, false, null);
-        document.getElementById('editorArea').focus();
-    },
-
-    execCmdVal(cmd, val) {
-        document.execCommand(cmd, false, val);
-        document.getElementById('editorArea').focus();
-    },
-
     /* ====== 图片上传 ====== */
     async uploadImage(file) {
         const formData = new FormData();
@@ -407,31 +407,47 @@ const App = {
         }
     },
 
-    /* 点击「插入图片」按钮 → 打开文件选择器 */
-    pickImage() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/jpeg,image/png,image/gif,image/webp';
-        input.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            if (file.size > 5 * 1024 * 1024) {
-                this.toast('图片大小不能超过5MB', 'danger');
-                return;
-            }
-            const url = await this.uploadImage(file);
-            if (url) {
-                document.execCommand('insertImage', false, url);
-                this.toast('图片已插入', 'success');
-            }
-        };
-        input.click();
+    /* ====== Quill 图片上传处理器 ====== */
+    initQuillImageHandler() {
+        if (!quillEditor) return;
+
+        const toolbar = quillEditor.getModule('toolbar');
+        toolbar.addHandler('image', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/jpeg,image/png,image/gif,image/webp';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (file.size > 5 * 1024 * 1024) {
+                    this.toast('图片大小不能超过5MB', 'danger');
+                    return;
+                }
+                const range = quillEditor.getSelection(true);
+                const insertPos = range.index;
+                quillEditor.insertEmbed(insertPos, 'image', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', Quill.sources.USER);
+                quillEditor.setSelection(insertPos + 1, Quill.sources.SILENT);
+
+                const url = await this.uploadImage(file);
+                if (url) {
+                    quillEditor.deleteText(insertPos, 1, Quill.sources.USER);
+                    quillEditor.insertEmbed(insertPos, 'image', url, Quill.sources.USER);
+                    quillEditor.setSelection(insertPos + 1, Quill.sources.SILENT);
+                    this.toast('图片已插入', 'success');
+                    this.updateEditorStats();
+                } else {
+                    quillEditor.deleteText(insertPos, 1, Quill.sources.USER);
+                }
+            };
+            input.click();
+        });
     },
 
-    /* ====== 粘贴图片支持 ====== */
-    initPasteImage() {
-        const area = document.getElementById('editorArea');
-        area.addEventListener('paste', async (e) => {
+    /* ====== Quill 粘贴图片支持 ====== */
+    initQuillPasteImage() {
+        if (!quillEditor) return;
+
+        quillEditor.root.addEventListener('paste', async (e) => {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             for (let i = 0; i < items.length; i++) {
                 if (items[i].type.indexOf('image') !== -1) {
@@ -441,27 +457,39 @@ const App = {
                         this.toast('图片大小不能超过5MB', 'danger');
                         return;
                     }
-                    // 先插入一个loading占位
-                    const tempId = 'img-loading-' + Date.now();
-                    document.execCommand('insertHTML', false,
-                        `<span id="${tempId}" style="display:inline-block;padding:8px 16px;background:#FEF2E8;color:#9B2C2C;border-radius:4px;font-size:0.85rem;">图片上传中...</span>`
-                    );
-                    // 上传
+                    const range = quillEditor.getSelection(true);
+                    const insertPos = range.index;
+                    quillEditor.insertEmbed(insertPos, 'image', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', Quill.sources.USER);
+                    quillEditor.setSelection(insertPos + 1, Quill.sources.SILENT);
+
                     const url = await this.uploadImage(file);
-                    // 替换占位
-                    const placeholder = document.getElementById(tempId);
-                    if (placeholder) {
-                        if (url) {
-                            placeholder.outerHTML = `<img src="${url}" alt="粘贴的图片">`;
-                            this.toast('图片已粘贴', 'success');
-                        } else {
-                            placeholder.remove();
-                        }
+                    if (url) {
+                        quillEditor.deleteText(insertPos, 1, Quill.sources.USER);
+                        quillEditor.insertEmbed(insertPos, 'image', url, Quill.sources.USER);
+                        quillEditor.setSelection(insertPos + 1, Quill.sources.SILENT);
+                        this.toast('图片已粘贴', 'success');
+                        this.updateEditorStats();
+                    } else {
+                        quillEditor.deleteText(insertPos, 1, Quill.sources.USER);
                     }
                     return;
                 }
             }
         });
+    },
+
+    /* ====== 编辑器字数统计 ====== */
+    updateEditorStats() {
+        if (!quillEditor) return;
+        const text = quillEditor.getText();
+        const charCount = text.replace(/\n/g, '').length;
+        const html = quillEditor.root.innerHTML;
+        const imgCount = (html.match(/<img/g) || []).length;
+
+        const charEl = document.getElementById('charCount');
+        const imgEl = document.getElementById('imgCount');
+        if (charEl) charEl.textContent = charCount + ' 字';
+        if (imgEl) imgEl.textContent = imgCount + ' 图';
     },
 
     /* ====== 搜索 ====== */
@@ -512,6 +540,8 @@ const App = {
                 </div>
                 <div class="note-actions flex-shrink-0">
                     <button class="btn-icon" title="查看" onclick="App.openNote(${n.id})"><i class="bi bi-eye"></i></button>
+                    <button class="btn-icon" title="编辑" onclick="App.showEditor('edit',${n.id})"><i class="bi bi-pencil"></i></button>
+                    <button class="btn-icon btn-icon-danger" title="删除" onclick="App.confirmDelete(${n.id})"><i class="bi bi-trash3"></i></button>
                 </div>
             </div>`).join('');
         }
@@ -549,10 +579,34 @@ const App = {
 
     /* ====== 初始化 ====== */
     init() {
-        this.initPasteImage();
+        this.initQuill();
         this.initSearch();
         window.addEventListener('hashchange', () => this.handleHashChange());
         this.handleHashChange();
+    },
+
+    /* ====== Quill 初始化 ====== */
+    initQuill() {
+        quillEditor = new Quill('#quill-editor', {
+            modules: {
+                toolbar: {
+                    container: '#quill-toolbar',
+                    handlers: {}
+                },
+                clipboard: {
+                    matchVisual: false
+                }
+            },
+            theme: 'snow',
+            placeholder: '在此书写笔记内容...'
+        });
+
+        quillEditor.on('text-change', () => {
+            this.updateEditorStats();
+        });
+
+        this.initQuillImageHandler();
+        this.initQuillPasteImage();
     }
 };
 
