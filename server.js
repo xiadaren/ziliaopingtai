@@ -26,6 +26,31 @@ const DB_PATH = path.join(DATA_DIR, 'notes.db');
 
 let db; // 全局数据库实例
 
+// 安全保存数据库（带锁）
+let saveInProgress = false;
+let saveRequested = false;
+
+function safeSaveDB() {
+    if (saveInProgress) {
+        saveRequested = true;
+        return;
+    }
+    saveInProgress = true;
+    saveRequested = false;
+    try {
+        const data = db.export();
+        const buffer = Buffer.from(data);
+        fs.writeFileSync(DB_PATH, buffer);
+    } catch (e) {
+        console.error('[数据库] 保存失败:', e);
+    } finally {
+        saveInProgress = false;
+        if (saveRequested) {
+            safeSaveDB();
+        }
+    }
+}
+
 // 初始化 sql.js
 initSqlJs().then(SQL => {
     // 如果数据库文件已存在，从文件加载；否则创建新的
@@ -89,22 +114,13 @@ initSqlJs().then(SQL => {
     global.saveDB = (immediate) => {
         if (immediate) {
             if (saveTimer) clearTimeout(saveTimer);
-            const data = db.export();
-            const buffer = Buffer.from(data);
-            fs.writeFileSync(DB_PATH, buffer);
+            safeSaveDB();
             return;
         }
         if (saveTimer) return;
         saveTimer = setTimeout(() => {
-            try {
-                const data = db.export();
-                const buffer = Buffer.from(data);
-                fs.writeFileSync(DB_PATH, buffer);
-            } catch (e) {
-                console.error('[数据库] 保存失败:', e);
-            } finally {
-                saveTimer = null;
-            }
+            safeSaveDB();
+            saveTimer = null;
         }, 100);
     };
 
@@ -343,6 +359,73 @@ const upload = multer({
 });
 
 /* ============================================================
+   请求限流
+   ============================================================ */
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1分钟
+const RATE_LIMIT_MAX = {
+    '/api/notes': { POST: 10, PUT: 10, DELETE: 10 },
+    '/api/upload': { POST: 20 },
+    '/api/search': { GET: 30 },
+    default: 60
+};
+
+// 定期清理过期的限流数据（每5分钟）
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, methodMap] of rateLimitMap.entries()) {
+        let hasExpired = true;
+        for (const [path, requests] of methodMap.entries()) {
+            const validRequests = requests.filter(time => now - time < RATE_LIMIT_WINDOW);
+            if (validRequests.length > 0) {
+                methodMap.set(path, validRequests);
+                hasExpired = false;
+            } else {
+                methodMap.delete(path);
+            }
+        }
+        if (hasExpired || methodMap.size === 0) {
+            rateLimitMap.delete(key);
+        }
+    }
+}, 5 * 60 * 1000);
+
+function getRateLimitKey(req) {
+    return req.ip || req.connection.remoteAddress || 'unknown';
+}
+
+function checkRateLimit(req) {
+    const key = getRateLimitKey(req);
+    const now = Date.now();
+    const method = req.method;
+    const path = req.path;
+
+    if (!rateLimitMap.has(key)) {
+        rateLimitMap.set(key, new Map());
+    }
+
+    const methodMap = rateLimitMap.get(key);
+    if (!methodMap.has(path)) {
+        methodMap.set(path, []);
+    }
+
+    const requests = methodMap.get(path);
+    // 清理过期请求
+    const validRequests = requests.filter(time => now - time < RATE_LIMIT_WINDOW);
+    methodMap.set(path, validRequests);
+
+    // 获取限制
+    let limit = RATE_LIMIT_MAX[path]?.[method] || RATE_LIMIT_MAX.default;
+
+    if (validRequests.length >= limit) {
+        return { allowed: false, remaining: 0, limit };
+    }
+
+    validRequests.push(now);
+    return { allowed: true, remaining: limit - validRequests.length - 1, limit };
+}
+
+/* ============================================================
    中间件
    ============================================================ */
 // GZIP 压缩（必须在其他中间件之前）
@@ -350,6 +433,26 @@ app.use(compression());
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+
+// 安全响应头
+app.use((req, res, next) => {
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('X-Frame-Options', 'DENY');
+    res.set('X-XSS-Protection', '1; mode=block');
+    res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+});
+
+// 限流中间件
+app.use('/api/', (req, res, next) => {
+    const result = checkRateLimit(req);
+    res.set('X-RateLimit-Limit', String(result.limit));
+    res.set('X-RateLimit-Remaining', String(result.remaining));
+    if (!result.allowed) {
+        return res.status(429).json({ success: false, message: '请求过于频繁，请稍后重试' });
+    }
+    next();
+});
 
 // 静态文件 + 长期缓存
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -506,6 +609,8 @@ app.post('/api/notes', (req, res) => {
         if (!content || !content.trim()) return res.status(400).json({ success: false, message: '请输入内容' });
         if (!major_id || !class_id) return res.status(400).json({ success: false, message: '缺少专业或班级参数' });
 
+        if (title.length > 200) return res.status(400).json({ success: false, message: '标题过长（最大200字）' });
+
         const safeContent = sanitizeHTML(content);
         const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
         db.run(
@@ -524,11 +629,15 @@ app.post('/api/notes', (req, res) => {
 
 app.put('/api/notes/:id', (req, res) => {
     try {
+        const noteId = parseInt(req.params.id);
+        if (isNaN(noteId)) return res.status(400).json({ success: false, message: '无效的笔记ID' });
+
         const { title, content } = req.body;
         if (!title || !title.trim()) return res.status(400).json({ success: false, message: '请输入标题' });
         if (!content || !content.trim()) return res.status(400).json({ success: false, message: '请输入内容' });
+        if (title.length > 200) return res.status(400).json({ success: false, message: '标题过长（最大200字）' });
 
-        const existing = db.exec('SELECT * FROM notes WHERE id = ?', [req.params.id]);
+        const existing = db.exec('SELECT * FROM notes WHERE id = ?', [noteId]);
         if (!existing[0] || !existing[0].values.length) {
             return res.status(404).json({ success: false, message: '笔记不存在' });
         }
@@ -537,7 +646,7 @@ app.put('/api/notes/:id', (req, res) => {
         const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
         db.run(
             'UPDATE notes SET title = ?, content = ?, updated_at = ? WHERE id = ?',
-            [title.trim(), safeContent, now, req.params.id]
+            [title.trim(), safeContent, now, noteId]
         );
         global.saveDB();
         const row = existing[0].values[0];
@@ -550,7 +659,10 @@ app.put('/api/notes/:id', (req, res) => {
 
 app.delete('/api/notes/:id', (req, res) => {
     try {
-        const existing = db.exec('SELECT * FROM notes WHERE id = ?', [req.params.id]);
+        const noteId = parseInt(req.params.id);
+        if (isNaN(noteId)) return res.status(400).json({ success: false, message: '无效的笔记ID' });
+
+        const existing = db.exec('SELECT * FROM notes WHERE id = ?', [noteId]);
         if (!existing[0] || !existing[0].values.length) {
             return res.status(404).json({ success: false, message: '笔记不存在' });
         }
@@ -559,7 +671,7 @@ app.delete('/api/notes/:id', (req, res) => {
         const imgRegex = /\/uploads\/[^"'\s>]+/g;
         const imgPaths = content.match(imgRegex) || [];
 
-        db.run('DELETE FROM notes WHERE id = ?', [req.params.id]);
+        db.run('DELETE FROM notes WHERE id = ?', [noteId]);
         global.saveDB();
 
         imgPaths.forEach(imgUrl => {

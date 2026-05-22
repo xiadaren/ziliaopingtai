@@ -893,6 +893,7 @@ body::after {
     letter-spacing: 0.5px;
 }
 .custom-toast.toast-danger { border-left-color: var(--danger); }
+.custom-toast.toast-warning { border-left-color: var(--accent); }
 
 @keyframes toastIn {
     from { opacity: 0; transform: translateX(30px); }
