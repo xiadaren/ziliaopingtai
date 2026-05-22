@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const initSqlJs = require('sql.js');
+const compression = require('compression');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -83,31 +84,48 @@ initSqlJs().then(SQL => {
         seedData();
     }
 
-    // 每次变更后持久化到文件
-    global.saveDB = () => {
-        const data = db.export();
-        const buffer = Buffer.from(data);
-        fs.writeFileSync(DB_PATH, buffer);
+    // 防抖保存：避免高频写入阻塞事件循环
+    let saveTimer = null;
+    global.saveDB = (immediate) => {
+        if (immediate) {
+            if (saveTimer) clearTimeout(saveTimer);
+            const data = db.export();
+            const buffer = Buffer.from(data);
+            fs.writeFileSync(DB_PATH, buffer);
+            return;
+        }
+        if (saveTimer) return;
+        saveTimer = setTimeout(() => {
+            try {
+                const data = db.export();
+                const buffer = Buffer.from(data);
+                fs.writeFileSync(DB_PATH, buffer);
+            } catch (e) {
+                console.error('[数据库] 保存失败:', e);
+            } finally {
+                saveTimer = null;
+            }
+        }, 100);
     };
 
-    // 监听进程退出，保存数据库
-    process.on('exit', () => global.saveDB());
+    // 监听进程退出，保存数据库（立即保存）
+    process.on('exit', () => global.saveDB(true));
     process.on('SIGINT', () => {
-        global.saveDB();
+        global.saveDB(true);
         process.exit(0);
     });
     process.on('SIGTERM', () => {
-        global.saveDB();
+        global.saveDB(true);
         process.exit(0);
     });
     process.on('uncaughtException', (err) => {
         console.error('[未捕获异常]', err);
-        global.saveDB();
+        global.saveDB(true);
         process.exit(1);
     });
     process.on('unhandledRejection', (reason, promise) => {
         console.error('[未处理的 Promise 拒绝]', reason);
-        global.saveDB();
+        global.saveDB(true);
     });
 
     console.log('[数据库] sql.js 初始化完成');
@@ -327,12 +345,21 @@ const upload = multer({
 /* ============================================================
    中间件
    ============================================================ */
+// GZIP 压缩（必须在其他中间件之前）
+app.use(compression());
+
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
-// 静态文件
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(UPLOAD_DIR));
+// 静态文件 + 长期缓存
+app.use(express.static(path.join(__dirname, 'public'), {
+    maxAge: '7d',
+    etag: true
+}));
+app.use('/uploads', express.static(UPLOAD_DIR, {
+    maxAge: '30d',
+    etag: true
+}));
 
 // 数据库未初始化时拦截 API 请求
 app.use('/api/', (req, res, next) => {
@@ -407,7 +434,8 @@ app.get('/api/majors/:majorId/classes', (req, res) => {
 app.get('/api/classes/:classId/notes', (req, res) => {
     try {
         const result = db.exec(`
-            SELECT id, title, content,
+            SELECT id, title,
+                SUBSTR(content, 1, 200) AS content_preview,
                 CASE WHEN content LIKE '%<img%' THEN 1 ELSE 0 END AS has_image,
                 created_at, updated_at
             FROM notes
